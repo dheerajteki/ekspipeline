@@ -14,28 +14,22 @@ version: 0.2
 phases:
   install:
     commands:
-      #- apt-get update
-      - apt-get install -y git python3 python3-pip
-      - pip install awscli 
-      - curl -o aws-iam-authenticator https://s3.us-west-2.amazonaws.com/amazon-eks/1.21.2/2021-07-05/bin/linux/amd64/aws-iam-authenticator
-      - chmod +x ./aws-iam-authenticator
-      - mkdir -p $HOME/bin && cp ./aws-iam-authenticator $HOME/bin/aws-iam-authenticator && export PATH=$PATH:$HOME/bin 
-      - curl -sS -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.23.7/2022-06-29/bin/linux/amd64/kubectl
-      - chmod +x ./kubectl
-      - export PATH=$PWD/:$PATH
-      - aws sts get-caller-identity
-      - aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
-      - export KUBECONFIG=$HOME/.kube/config
-      - kubectl cluster-info
-
+      - echo "Install Phase - if you need additional package, add it in this stage"
   pre_build:
-    commands:
-      - PRODUCT_TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
-      - REVIEW_TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
-      - sed -i 's@PRODUCT_CONTAINER_IMAGE@'"$ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG"'@' k8s-microservices-full.yaml
-      #- sed -i 's@REVIEW_CONTAINER_IMAGE@'"$ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG"'@' k8s-microservices-full.yaml
-      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-      - export KUBECONFIG=$HOME/.kube/config
+      commands:
+        # This Docker Image tag will have date, time and Codecommit version
+        - PRODUCT_TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
+        # Updating Docker Image tag in your Kubernetes Deployment Manifest        
+        - echo "Update Image tag in kubernetes manifest"
+        - sed -i 's@PRODUCT_CONTAINER_IMAGE@'"$ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG"'@' k8s-microservices-full.yaml
+        # Check AWS CLI Version        
+        - echo "Checking AWS CLI Version..."
+        - aws --version
+        # Login to ECR Registry 
+        - echo "Login in to Amazon ECR Registry"
+        - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+        # Update Kube config Home Directory
+        - export KUBECONFIG=$HOME/.kube/config
   build:
     commands:
 # Command "cd" is only allowed in the build phase
@@ -44,14 +38,27 @@ phases:
       #- cd review && docker build -t $ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG . && cd ..
   post_build:
     commands:
+      # Push Docker Image to ECR Repository
+      - echo "Docker build completed on `date`"
+      - echo "Pushing the Docker image to ECR Repository"
       - docker push $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG
-      #- docker push $ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG
-      - aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
+      - echo "Docker Push to ECR Repository Completed -  $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG"    
+      # Get AWS Credential using STS Assume Role for kubectl
+      - echo "Setting Environment Variables related to AWS CLI for Kube Config Setup"          
+      - CREDENTIALS=$(aws sts assume-role --role-arn $EKS_ROLE_ARN --role-session-name eks-codebuild --duration-seconds 900)
+      - export AWS_ACCESS_KEY_ID="$(echo ${CREDENTIALS} | jq -r '.Credentials.AccessKeyId')"
+      - export AWS_SECRET_ACCESS_KEY="$(echo ${CREDENTIALS} | jq -r '.Credentials.SecretAccessKey')"
+      - export AWS_SESSION_TOKEN="$(echo ${CREDENTIALS} | jq -r '.Credentials.SessionToken')"
+      - export AWS_EXPIRATION=$(echo ${CREDENTIALS} | jq -r '.Credentials.Expiration')
+      # Updating kubectl with your EKS Cluster              
+      - echo "Update Kube Config configuration"      
+      - aws eks update-kubeconfig --name $EKS_CLUSTER_NAME
+      # Show time, applying manifests changes using kubectl
+      - echo "Apply changes to kube manifests"            
       - kubectl apply -f k8s-microservices-full.yaml
-      - printf '[{"name":"k8s-microservices","imageUri":"%s"}]' $REPOSITORY_URI:$PRODUCT_TAG > build.json
-      - printf '[{"name":"k8s-microservices","imageUri":"%s"}]' $REPOSITORY_URI:$REVIEW_TAG >> build.json
-      - cat k8s-microservices-full.yaml
-      - cat k8s-microservices-full.yaml >> build.json
+      - echo "All done!!!! Kubernetes changes applied"           
+      # Create Artifacts which we can use if we want to continue our pipeline for other stages
+      - printf '[{"name":"deployment.yaml","imageUri":"%s"}]' $REPOSITORY_URI:$TAG > build.json
 artifacts:
   files: build.json
 cache:
