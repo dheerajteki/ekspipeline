@@ -35,20 +35,20 @@ phases:
     commands:
       # Command "cd" is only allowed in the build phase
       - yum install maven -y
-      - echo "############################# Docker Version ###########################"
+      - echo "DOCKER VERSION"
       - docker version
       - mvn clean install
       # Build the Product Docker Image
       - cd product && docker build -t $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG . && cd ..
       # (Optional) Build the Review Docker Image (uncomment if needed)
-      # - docker build -t "$ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG" review
+      # - docker build -t $ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG
 
   post_build:
     commands:
       # Push Docker Image to ECR Repository
       - echo "Docker build completed on `date`"
       - echo "Pushing the Docker image to ECR Repository"
-      - docker push "$ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG"
+      - docker push $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG
       - echo "Docker Push to ECR Repository Completed - $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG"
       # Get AWS Credential using STS Assume Role for kubectl
       - echo "Setting Environment Variables related to AWS CLI for Kube Config Setup"
