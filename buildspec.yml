@@ -27,7 +27,7 @@ phases:
       - PRODUCT_TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
       - REVIEW_TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
       - sed -i 's@PRODUCT_CONTAINER_IMAGE@'"$ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG"'@' k8s-microservices-full.yaml
-      - sed -i 's@REVIEW_CONTAINER_IMAGE@'"$ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG"'@' k8s-microservices-full.yaml
+      #- sed -i 's@REVIEW_CONTAINER_IMAGE@'"$ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG"'@' k8s-microservices-full.yaml
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
       - export KUBECONFIG=$HOME/.kube/config
   build:
@@ -35,11 +35,11 @@ phases:
 # Command "cd" is only allowed in the build phase
       - mvn clean install
       - cd product && docker build -t $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG . && cd ..
-      - cd review && docker build -t $ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG . && cd ..
+      #- cd review && docker build -t $ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG . && cd ..
   post_build:
     commands:
       - docker push $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG
-      - docker push $ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG
+      #- docker push $ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG
       - aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
       - kubectl apply -f k8s-microservices-full.yaml
       - printf '[{"name":"k8s-microservices","imageUri":"%s"}]' $REPOSITORY_URI:$PRODUCT_TAG > build.json
