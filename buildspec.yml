@@ -34,7 +34,7 @@ phases:
     commands:
 # Command "cd" is only allowed in the build phase
       - apt update
-      - apt install docker -y
+      - apt install docker.io -y
       - systemctl status docker
       - systemctl start docker
       - mvn clean install
