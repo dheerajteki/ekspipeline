@@ -33,6 +33,7 @@ phases:
   build:
     commands:
 # Command "cd" is only allowed in the build phase
+      - apt install docker.io -y
       - mvn clean install
       - cd product && docker build -t $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG . && cd ..
       #- cd review && docker build -t $ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG . && cd ..
