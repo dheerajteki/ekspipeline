@@ -18,6 +18,10 @@ phases:
       - yum update -y
   pre_build:
     commands:
+      - curl -sS -o aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/1.19.6/2021-01-05/bin/linux/amd64/aws-iam-authenticator
+      - curl -sS -o kubectl https://amazon-eks.s3.us-west-2.amazonaws.com/1.20.4/2021-04-12/bin/linux/amd64/kubectl
+      - chmod +x ./kubectl ./aws-iam-authenticator
+      - export PATH=$PWD/:$PATH
       # This Docker Image tag will have date, time and Codecommit version
       - PRODUCT_TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
       # Updating Docker Image tag in your Kubernetes Deployment Manifest
