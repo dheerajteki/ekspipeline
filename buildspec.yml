@@ -34,10 +34,9 @@ phases:
   build:
     commands:
       # Command "cd" is only allowed in the build phase
-      - amazon-linux-extras install docker -y
-      - systemctl status docker
-      - systemctl start docker
       - yum install maven -y
+      - echo "############################# Docker Version ###########################"
+      - docker version
       - mvn clean install
       # Build the Product Docker Image
       - cd product && docker build -t $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG . && cd ..
