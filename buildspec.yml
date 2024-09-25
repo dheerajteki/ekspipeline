@@ -35,6 +35,8 @@ phases:
 # Command "cd" is only allowed in the build phase
       - apt update
       - apt install docker -y
+      - systemctl status docker
+      - systemctl start docker
       - mvn clean install
       - cd product && docker build -t $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG . && cd ..
       #- cd review && docker build -t $ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG . && cd ..
