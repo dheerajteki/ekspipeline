@@ -1,6 +1,6 @@
 # AWS CodeBuild Requirements
 #
-# Make sure you are using Operating System as - Ubuntu in the AWS CodeBuild Project for below script to work
+# Make sure you are using Operating System as - Amazon Linux 2 in the AWS CodeBuild Project for below script to work
 #
 # Following environment variables are needed in AWS CodeBuild Project
 # ECR_PRODUCT_REPOSITORY_URI
@@ -14,55 +14,59 @@ version: 0.2
 phases:
   install:
     commands:
-      - echo "Install Phase - if you need additional package, add it in this stage"
+      - echo "Install Phase - if you need additional packages, add it in this stage"
+      - yum update -y
   pre_build:
-      commands:
-        # This Docker Image tag will have date, time and Codecommit version
-        - PRODUCT_TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
-        # Updating Docker Image tag in your Kubernetes Deployment Manifest        
-        - echo "Update Image tag in kubernetes manifest"
-        - sed -i 's@PRODUCT_CONTAINER_IMAGE@'"$ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG"'@' k8s-microservices-full.yaml
-        # Check AWS CLI Version        
-        - echo "Checking AWS CLI Version..."
-        - aws --version
-        # Login to ECR Registry 
-        - echo "Login in to Amazon ECR Registry"
-        - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-        # Update Kube config Home Directory
-        - export KUBECONFIG=$HOME/.kube/config
+    commands:
+      # This Docker Image tag will have date, time and Codecommit version
+      - PRODUCT_TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
+      # Updating Docker Image tag in your Kubernetes Deployment Manifest
+      - echo "Update Image tag in kubernetes manifest"
+      - sed -i "s@PRODUCT_CONTAINER_IMAGE@'$ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG'@g" k8s-microservices-full.yaml
+      # Check AWS CLI Version
+      - echo "Checking AWS CLI Version..."
+      - aws --version
+      # Login to ECR Registry
+      - echo "Login in to Amazon ECR Registry"
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+      # Update Kube config Home Directory
+      - export KUBECONFIG=$HOME/.kube/config
   build:
     commands:
-# Command "cd" is only allowed in the build phase
-      - apt update
-      - apt install docker.io -y
+      # Command "cd" is only allowed in the build phase
+      - amazon-linux-extras install docker -y
       - systemctl status docker
       - systemctl start docker
+      - yum install maven -y
       - mvn clean install
+      # Build the Product Docker Image
       - cd product && docker build -t $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG . && cd ..
-      #- cd review && docker build -t $ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG . && cd ..
+      # (Optional) Build the Review Docker Image (uncomment if needed)
+      # - docker build -t "$ECR_REVIEW_REPOSITORY_URI:$REVIEW_TAG" review
+
   post_build:
     commands:
       # Push Docker Image to ECR Repository
       - echo "Docker build completed on `date`"
       - echo "Pushing the Docker image to ECR Repository"
-      - docker push $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG
-      - echo "Docker Push to ECR Repository Completed -  $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG"    
+      - docker push "$ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG"
+      - echo "Docker Push to ECR Repository Completed - $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG"
       # Get AWS Credential using STS Assume Role for kubectl
-      - echo "Setting Environment Variables related to AWS CLI for Kube Config Setup"          
+      - echo "Setting Environment Variables related to AWS CLI for Kube Config Setup"
       - CREDENTIALS=$(aws sts assume-role --role-arn $EKS_ROLE_ARN --role-session-name eks-codebuild --duration-seconds 900)
       - export AWS_ACCESS_KEY_ID="$(echo ${CREDENTIALS} | jq -r '.Credentials.AccessKeyId')"
       - export AWS_SECRET_ACCESS_KEY="$(echo ${CREDENTIALS} | jq -r '.Credentials.SecretAccessKey')"
       - export AWS_SESSION_TOKEN="$(echo ${CREDENTIALS} | jq -r '.Credentials.SessionToken')"
       - export AWS_EXPIRATION=$(echo ${CREDENTIALS} | jq -r '.Credentials.Expiration')
-      # Updating kubectl with your EKS Cluster              
-      - echo "Update Kube Config configuration"      
+      # Updating kubectl with your EKS Cluster
+      - echo "Update Kube Config configuration"
       - aws eks update-kubeconfig --name $EKS_CLUSTER_NAME
       # Show time, applying manifests changes using kubectl
-      - echo "Apply changes to kube manifests"            
+      - echo "Apply changes to kube manifests"
       - kubectl apply -f k8s-microservices-full.yaml
-      - echo "All done!!!! Kubernetes changes applied"           
+      - echo "All done!!!! Kubernetes changes applied"
       # Create Artifacts which we can use if we want to continue our pipeline for other stages
-      - printf '[{"name":"deployment.yaml","imageUri":"%s"}]' $REPOSITORY_URI:$TAG > build.json
+      - printf '[{"name":"deployment.yaml","imageUri":"%s"}]' "$REPOSITORY_URI:$TAG" > build.json
 artifacts:
   files: build.json
 cache:
