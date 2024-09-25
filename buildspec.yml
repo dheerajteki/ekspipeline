@@ -35,6 +35,7 @@ phases:
     commands:
       # Command "cd" is only allowed in the build phase
       - yum install maven -y
+      - systemctl start docker
       - echo "DOCKER VERSION"
       - docker version
       - mvn clean install
