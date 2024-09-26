@@ -34,6 +34,8 @@ phases:
       - echo Pushing the Docker images...
       - docker push $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG
       - echo Applying changes to deployment
+      - kubectl config current-context
+      - kubectl get nodes
       - kubectl apply -f k8s-microservices-full.yaml
       - echo Writing image definitions file...
       - printf '[{"name":"%s","imageUri":"%s"}]' "$ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG" | tee imagedefinitions.json
