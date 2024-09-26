@@ -13,9 +13,6 @@ phases:
     commands:
       - aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION
       - cat ~/.kube/config
-      - kubectl config view
-      - kubectl config current-context
-      - kubectl get nodes
       - PRODUCT_TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
       # Updating Docker Image tag in your Kubernetes Deployment Manifest
       - echo "Update Image tag in kubernetes manifest"
@@ -37,6 +34,11 @@ phases:
       - echo Pushing the Docker images...
       - docker push $ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG
       - echo Applying changes to deployment
+      - CREDENTIALS=$(aws sts assume-role --role-arn $EKS_ROLE_ARN --role-session-name codebuild-kubectl --duration-seconds 900)
+      - export AWS_ACCESS_KEY_ID="$(echo ${CREDENTIALS} | jq -r '.Credentials.AccessKeyId')"
+      - export AWS_SECRET_ACCESS_KEY="$(echo ${CREDENTIALS} | jq -r '.Credentials.SecretAccessKey')"
+      - export AWS_SESSION_TOKEN="$(echo ${CREDENTIALS} | jq -r '.Credentials.SessionToken')"
+      - export AWS_EXPIRATION=$(echo ${CREDENTIALS} | jq -r '.Credentials.Expiration')
       - kubectl apply -f k8s-microservices-full.yaml
       - echo Writing image definitions file...
       - printf '[{"name":"%s","imageUri":"%s"}]' "$ECR_PRODUCT_REPOSITORY_URI:$PRODUCT_TAG" | tee imagedefinitions.json
